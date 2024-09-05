@@ -11,15 +11,15 @@ on:
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
 
-env:
-  # Use docker.io for Docker Hub if empty
-  REGISTRY: ghcr.io
-  # github.repository as <account>/<repo>
-  IMAGE_NAME: ${{ github.repository }}
-
 
 jobs:
   build-drainer:
+
+    env:
+        # Use docker.io for Docker Hub if empty
+        REGISTRY: ghcr.io
+        # github.repository as <account>/<repo>
+        IMAGE_NAME: ${{ github.repository }}/drainer    
 
     runs-on: ubuntu-latest
     permissions:
@@ -71,6 +71,12 @@ jobs:
 
         
   build-emitter:
+
+    env:
+        # Use docker.io for Docker Hub if empty
+        REGISTRY: ghcr.io
+        # github.repository as <account>/<repo>
+        IMAGE_NAME: ${{ github.repository }}/emitter    
 
     runs-on: ubuntu-latest
     permissions:
