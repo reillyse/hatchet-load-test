@@ -11,6 +11,11 @@ RUN go mod download
 
 
 ADD . .
+# make sure we have a .env
+
+RUN touch .env
+
+
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /drainer src/hatchet-load-test/drainer/main.go

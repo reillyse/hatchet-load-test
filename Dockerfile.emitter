@@ -11,6 +11,9 @@ RUN go mod download
 
 
 ADD . .
+# make sure we have a .env
+
+RUN touch .env
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /emitter src/hatchet-load-test/emitter/main.go
