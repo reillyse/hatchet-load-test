@@ -40,36 +40,36 @@ func main() {
 		panic(err)
 	}
 
-	// testEvent := loadTestEvent{
+	testEvent := loadTestEvent{
 
-	// 	Data: map[string]string{
-	// 		"test": "test",
-	// 	},
-	// }
+		Data: map[string]string{
+			"test": "test",
+		},
+	}
 
-	// log.Printf("pushing event hatchet:load-test")
-	// // push an event
-	// err = c.Event().Push(
-	// 	context.Background(),
-	// 	"hatchet:ha:load-test:v2",
-	// 	testEvent,
-	// 	client.WithEventMetadata(map[string]string{
-	// 		"hello": "loadtest",
-	// 	}),
-	// )
+	log.Printf("pushing event hatchet:load-test")
+	// push an event
+	err = c.Event().Push(
+		context.Background(),
+		"hatchet:ha:load-test:v2",
+		testEvent,
+		client.WithEventMetadata(map[string]string{
+			"hello": "loadtest",
+		}),
+	)
 
 	// start workflow run
 
-	wid, err := c.Admin().RunWorkflow(
-		"ha-loadtester-v3",
-		&loadTestEvent{},
-	)
+	// wid, err := c.Admin().RunWorkflow(
+	// 	"ha-loadtester-v3",
+	// 	&loadTestEvent{},
+	// )
 
 	if err != nil {
 		panic(fmt.Errorf("error pushing event: %w", err))
 	}
 
-	log.Printf("workflow run started: %s", wid)
+	// log.Printf("workflow run started: %s", wid)
 
 	<-interrupt
 
@@ -117,8 +117,8 @@ func run(c client.Client) (func() error, error) {
 					if duration == "" {
 						duration = "10s"
 					}
-
-					testCmd := fmt.Sprintf("./loadtest loadtest --duration \"%s\" --events %s", duration, events)
+					// for container it is in root
+					testCmd := fmt.Sprintf("/loadtest loadtest --duration \"%s\" --events %s", duration, events)
 					//testCmd := "echo \"Hello, World!\""
 					// run a load test
 					commandCtx, cancel := context.WithCancel(context.Background())
