@@ -97,8 +97,19 @@ func run(c client.Client) (func() error, error) {
 					log.Printf("start")
 					timeStart := time.Now()
 
-					// testCmd := "./loadtest loadtest --duration \"10s\" --events 1"
-					testCmd := "echo \"Hello, World!\""
+					events := os.Getenv("HATCHET_LOADTEST_EVENTS")
+					duration := os.Getenv("HATCHET_LOADTEST_DURATION")
+
+					if events == "" {
+						events = "1"
+					}
+
+					if duration == "" {
+						duration = "10s"
+					}
+
+					testCmd := fmt.Sprintf("/loadtest loadtest --duration \"%s\" --events %s", duration, events)
+					//testCmd := "echo \"Hello, World!\""
 					// run a load test
 					commandCtx, cancel := context.WithCancel(context.Background())
 					defer cancel()

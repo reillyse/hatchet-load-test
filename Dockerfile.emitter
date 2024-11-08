@@ -20,4 +20,4 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /emitter src/hatchet-load-test/emitter/
 RUN CGO_ENABLED=0 GOOS=linux go build -o /loadtest ./examples/loadtest/cli 
 
 # Run
-CMD ["bash", "-c", "/loadtest loadtest --duration '20s' --events 10"]
+CMD ["/emitter"]
