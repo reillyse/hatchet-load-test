@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
-	"strconv"
-	"sync"
+	"os/exec"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -14,10 +15,8 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/worker"
 )
 
-type userCreateEvent struct {
-	Username string            `json:"username"`
-	UserID   string            `json:"user_id"`
-	Data     map[string]string `json:"data"`
+type loadTestEvent struct {
+	Data map[string]string `json:"data"`
 }
 
 type stepOneOutput struct {
@@ -27,124 +26,116 @@ type stepOneOutput struct {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		panic(err)
-	}
-
-	// get the number of events to push from args to the cli
-	var eventsArg string
-	if len(os.Args) > 1 {
-		eventsArg = os.Args[1]
-	}
-
-	var numEvents int
-
-	if eventsArg == "" {
-		numEvents = 5000000
-	} else {
-		numEvents, err = strconv.Atoi(eventsArg)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	var workerCountArg string
-	if len(os.Args) > 1 {
-		workerCountArg = os.Args[2]
-	}
-
-	var numWorkers int
-
-	if workerCountArg == "" {
-		numWorkers = 5
-	} else {
-		numWorkers, err = strconv.Atoi(workerCountArg)
-		if err != nil {
-			panic(err)
-		}
+		log.Default().Println("Error loading .env file")
 	}
 
 	interrupt := cmdutils.InterruptChan()
-	ctx, cancel := context.WithCancel(context.Background())
 
-	var wg sync.WaitGroup
-	workerCount := numWorkers
-	wg.Add(workerCount)
-
-	go func() {
-		for i := range workerCount {
-			go func(i int) {
-				_, err = run(ctx, numEvents/workerCount, i)
-				if err != nil {
-					panic(err)
-				}
-				wg.Done()
-
-			}(i)
-		}
-
-		wg.Wait()
-		cancel()
-	}()
-
-	select {
-	case <-interrupt:
-		return
-	case <-ctx.Done():
-		return
-
+	cleanup, err := run()
+	if err != nil {
+		panic(err)
 	}
 
+	<-interrupt
+
+	if err := cleanup(); err != nil {
+		panic(fmt.Errorf("error cleaning up: %w", err))
+	}
 }
 
-func getConcurrencyKey(ctx worker.HatchetContext) (string, error) {
-	return "user-create", nil
-}
-
-func run(ctx context.Context, numEvents int, workerId int) (func() error, error) {
+func run() (func() error, error) {
 	c, err := client.New()
 
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
-	fmt.Printf("worker %v: loading %v events\n", workerId, numEvents)
+	w, err := worker.NewWorker(
+		worker.WithClient(
+			c,
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating worker: %w", err)
+	}
 
-	for i := 0; i < numEvents; i++ {
-		select {
-		case <-ctx.Done():
-			return nil, nil
-		default:
+	err = w.RegisterWorkflow(
+		&worker.WorkflowJob{
+			On:          worker.Events("hatchet:load-test"),
+			Name:        "load",
+			Description: "Run a load test",
+			Steps: []*worker.WorkflowStep{
+				worker.Fn(func(ctx worker.HatchetContext) (result *stepOneOutput, err error) {
+					input := &loadTestEvent{}
 
-			if (i % 1000) == 0 {
-				fmt.Printf("worker %v: loaded %v events\n", workerId, i)
-			}
+					err = ctx.WorkflowInput(input)
 
-			testEvent := userCreateEvent{
-				Username: "echo-test",
-				UserID:   "1234",
-				Data: map[string]string{
-					"test": "test",
+					if err != nil {
+						return nil, err
+					}
+
+					log.Printf("start")
+					timeStart := time.Now()
+
+					testCmd := "./loadtest loadtest --duration \"20s\" --events 10"
+					// run a load test
+
+					cmd := exec.Command("sh", "-c", testCmd)
+
+					// Inherit the current environment
+					cmd.Env = os.Environ()
+
+					// Set the output to go to the standard output and error
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+
+					// Run the command
+					err = cmd.Run()
+
+					if err != nil {
+						return nil, err
+					}
+					timeEnd := time.Now()
+
+					timeTaken := timeEnd.Sub(timeStart)
+
+					return &stepOneOutput{Message: fmt.Sprintf("%s", timeTaken)}, nil
 				},
-			}
+				).SetName("step-one"),
+			},
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error registering workflow: %w", err)
+	}
 
-			// log.Printf("pushing event user:create:load_test")
-			// push an event
-			err := c.Event().Push(
-				context.Background(),
-				"user:create:load_test",
-				testEvent,
-				client.WithEventMetadata(map[string]string{
-					"hello": "load test",
-				}),
-			)
-			if err != nil {
-				panic(fmt.Errorf("error pushing event: %w", err))
-			}
+	go func() {
+		testEvent := loadTestEvent{
 
+			Data: map[string]string{
+				"test": "test",
+			},
 		}
 
-	}
-	fmt.Printf("worker %v: loaded %v events\n", workerId, numEvents)
+		log.Printf("pushing event hatchet:load-test")
+		// push an event
+		err := c.Event().Push(
+			context.Background(),
+			"hatchet:load-test",
+			testEvent,
+			client.WithEventMetadata(map[string]string{
+				"hello": "loadtest",
+			}),
+		)
+		if err != nil {
+			panic(fmt.Errorf("error pushing event: %w", err))
+		}
+	}()
 
-	return nil, nil
+	cleanup, err := w.Start()
+	if err != nil {
+		panic(err)
+	}
+
+	return cleanup, nil
 }
