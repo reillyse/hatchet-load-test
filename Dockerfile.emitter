@@ -17,7 +17,7 @@ RUN touch .env
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux go build -o /emitter src/hatchet-load-test/emitter/main.go
-RUN CGO_ENABLED=0 GOOS=linux go build -o /loadtest examples/loadtest/cli 
+RUN CGO_ENABLED=0 GOOS=linux go build -o /loadtest ./examples/loadtest/cli 
 
 # Run
-CMD ["/emitter"]
+CMD ["bash", "-c", "/loadtest loadtest --duration '20s' --events 10"]
