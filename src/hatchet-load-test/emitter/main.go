@@ -11,6 +11,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/hatchet-dev/hatchet/pkg/client"
+	"github.com/hatchet-dev/hatchet/pkg/client/types"
 	"github.com/hatchet-dev/hatchet/pkg/cmdutils"
 	"github.com/hatchet-dev/hatchet/pkg/worker"
 )
@@ -96,6 +97,7 @@ func run(c client.Client) (func() error, error) {
 			On:          worker.Events("hatchet:ha:load-test:v2"),
 			Name:        "ha-loadtester-v3",
 			Description: "Run a load test",
+			Concurrency: worker.Expression("'default'").MaxRuns(1).LimitStrategy(types.GroupRoundRobin),
 			Steps: []*worker.WorkflowStep{
 				worker.Fn(func(ctx worker.HatchetContext) (result *stepOneOutput, err error) {
 					input := &loadTestEvent{}
