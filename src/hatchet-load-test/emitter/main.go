@@ -121,6 +121,17 @@ func run(c client.Client) (func() error, error) {
 					if duration == "" {
 						duration = "10s"
 					}
+
+					if input.Data["duration"] != "" {
+						duration = input.Data["duration"]
+						log.Printf("using duration from input data: %s", duration)
+					}
+
+					if input.Data["events"] != "" {
+						events = input.Data["events"]
+						log.Printf("using events from input data: %s", events)
+					}
+
 					// for container it is in root
 					testCmd := fmt.Sprintf("/loadtest loadtest --duration \"%s\" --events %s", duration, events)
 					//testCmd := "echo \"Hello, World!\""
