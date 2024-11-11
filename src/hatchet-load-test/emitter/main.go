@@ -70,11 +70,11 @@ func main() {
 		panic(fmt.Errorf("error pushing event: %w", err))
 	}
 
-	log.Printf("workflow run started: %s", wid)
+	log.Printf("workflow run started: %s \n", wid.WorkflowRunId())
 
-	<-interrupt
+	sig := <-interrupt
 
-	log.Println("received interrupt signal shutting down")
+	log.Printf("received interrupt signal %s shutting down \n", sig)
 
 	if err := cleanup(); err != nil {
 		panic(fmt.Errorf("error cleaning up: %w", err))
