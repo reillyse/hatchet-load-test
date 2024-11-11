@@ -49,29 +49,31 @@ func main() {
 
 	log.Printf("pushing event hatchet:load-test")
 	// push an event
-	err = c.Event().Push(
-		context.Background(),
-		"hatchet:ha:load-test:v2",
-		testEvent,
-		client.WithEventMetadata(map[string]string{
-			"hello": "loadtest",
-		}),
-	)
+	// err = c.Event().Push(
+	// 	context.Background(),
+	// 	"hatchet:ha:load-test:v2",
+	// 	testEvent,
+	// 	client.WithEventMetadata(map[string]string{
+	// 		"hello": "loadtest",
+	// 	}),
+	// )
 
 	// start workflow run
 
-	// wid, err := c.Admin().RunWorkflow(
-	// 	"ha-loadtester-v3",
-	// 	&loadTestEvent{},
-	// )
+	wid, err := c.Admin().RunWorkflow(
+		"ha-loadtester-v3",
+		&testEvent,
+	)
 
 	if err != nil {
 		panic(fmt.Errorf("error pushing event: %w", err))
 	}
 
-	// log.Printf("workflow run started: %s", wid)
+	log.Printf("workflow run started: %s", wid)
 
 	<-interrupt
+
+	log.Println("received interrupt signal shutting down")
 
 	if err := cleanup(); err != nil {
 		panic(fmt.Errorf("error cleaning up: %w", err))
