@@ -89,6 +89,7 @@ func run(c client.Client) (func() error, error) {
 		worker.WithClient(
 			c,
 		),
+		worker.WithMaxRuns(10000),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating worker: %w", err)
