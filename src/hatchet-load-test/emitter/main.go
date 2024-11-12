@@ -179,7 +179,7 @@ func run(c client.Client) (func() error, error) {
 
 						eventsPerSecond := float64(eventCount) / durationSeconds
 
-						return &stepOneOutput{Message: fmt.Sprintf("%s events per second", eventsPerSecond)}, nil
+						return &stepOneOutput{Message: fmt.Sprintf("%.2f events per second", eventsPerSecond)}, nil
 
 					},
 					).SetName("step-one").SetRetries(0),
