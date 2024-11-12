@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -165,7 +166,20 @@ func run(c client.Client) (func() error, error) {
 
 						timeTaken := timeEnd.Sub(timeStart)
 						fmt.Println("Time taken: ", timeTaken)
-						return &stepOneOutput{Message: fmt.Sprintf("%s", timeTaken)}, nil
+						// convert events to int
+
+						eventCount, err := strconv.ParseInt(events, 10, 64)
+						if err != nil {
+							return nil, fmt.Errorf("error converting events to int64: %w", err)
+						}
+
+						parsedDuration, err := time.ParseDuration(duration)
+
+						durationSeconds := parsedDuration.Seconds()
+
+						eventsPerSecond := float64(eventCount) / durationSeconds
+
+						return &stepOneOutput{Message: fmt.Sprintf("%s events per second", eventsPerSecond)}, nil
 
 					},
 					).SetName("step-one").SetRetries(0),
