@@ -17,8 +17,7 @@ import (
 )
 
 type loadTestEvent struct {
-	events   string
-	duration string
+	Data map[string]string `json:"data"`
 }
 
 type stepOneOutput struct {
@@ -43,7 +42,12 @@ func main() {
 		panic(err)
 	}
 
-	testEvent := loadTestEvent{}
+	testEvent := loadTestEvent{
+
+		Data: map[string]string{
+			"test": "test",
+		},
+	}
 
 	log.Printf("pushing event hatchet:load-test")
 	// push an event
@@ -123,13 +127,13 @@ func run(c client.Client) (func() error, error) {
 							duration = "10s"
 						}
 
-						if input.duration != "" {
-							duration = input.duration
+						if input.Data["duration"] != "" {
+							duration = input.Data["duration"]
 							log.Printf("using duration from input data: %s", duration)
 						}
 
-						if input.events != "" {
-							events = input.events
+						if input.Data["events"] != "" {
+							events = input.Data["events"]
 							log.Printf("using events from input data: %s", events)
 						}
 
