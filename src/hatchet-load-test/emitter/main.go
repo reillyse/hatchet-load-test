@@ -81,6 +81,7 @@ func run(c client.Client) (func() error, error) {
 		worker.WithClient(
 			c,
 		),
+		worker.WithMaxRuns(1000),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating worker: %w", err)
@@ -157,7 +158,7 @@ func run(c client.Client) (func() error, error) {
 						var wg sync.WaitGroup
 						results := make([]string, workflowCount)
 						resultCh := make(chan string, workflowCount)
-						concurrencyLimit := 1000
+						concurrencyLimit := 100
 
 						semChannel := make(chan struct{}, concurrencyLimit)
 
@@ -192,8 +193,10 @@ func run(c client.Client) (func() error, error) {
 							}(i)
 						}
 						go func() {
+
 							wg.Wait()
-							close(resultCh)
+							fmt.Println("awaited all of the workflows")
+							close(resultCh) // this unblocks the range
 						}()
 
 						// Collect all results
