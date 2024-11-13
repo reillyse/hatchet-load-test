@@ -1,12 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -21,6 +20,10 @@ type loadTestEvent struct {
 	Data map[string]string `json:"data"`
 }
 
+type childInput struct {
+	Data map[string]string `json:"data"`
+}
+
 type stepOneOutput struct {
 	Message string `json:"message"`
 }
@@ -30,49 +33,38 @@ func main() {
 	if err != nil {
 		log.Default().Println("Error loading .env file")
 	}
-
-	interrupt := cmdutils.InterruptChan()
-	c, err := client.New()
-
-	if err != nil {
-		panic(err)
-	}
-
-	cleanup, err := run(c)
-	if err != nil {
-		panic(err)
-	}
-
 	testEvent := loadTestEvent{
 
 		Data: map[string]string{
 			"test": "test",
 		},
 	}
-
-	log.Printf("pushing event hatchet:load-test")
-	// push an event
-	// err = c.Event().Push(
-	// 	context.Background(),
-	// 	"hatchet:ha:load-test:v2",
-	// 	testEvent,
-	// 	client.WithEventMetadata(map[string]string{
-	// 		"hello": "loadtest",
-	// 	}),
-	// )
-
-	// start workflow run
-
-	wid, err := c.Admin().RunWorkflow(
-		"ha-loadtester-v3",
-		&testEvent,
-	)
+	interrupt := cmdutils.InterruptChan()
+	c, err := client.New()
 
 	if err != nil {
-		panic(fmt.Errorf("error pushing event: %w", err))
+		panic(err)
 	}
+	go func() {
+		time.Sleep(5 * time.Second) //just to let the worker get registered
 
-	log.Printf("workflow run started: %s \n", wid.WorkflowRunId())
+		log.Printf("pushing event hatchet:load-test")
+		wid, err := c.Admin().RunWorkflow(
+			"ha-loadtester-v3",
+			&testEvent,
+		)
+
+		if err != nil {
+			panic(fmt.Errorf("error pushing event: %w", err))
+		}
+
+		log.Printf("workflow run started: %s \n", wid.WorkflowRunId())
+	}()
+
+	cleanup, err := run(c)
+	if err != nil {
+		panic(err)
+	}
 
 	sig := <-interrupt
 
@@ -92,6 +84,34 @@ func run(c client.Client) (func() error, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating worker: %w", err)
+	}
+
+	err = w.RegisterWorkflow(
+		&worker.WorkflowJob{
+			On:          worker.NoTrigger(),
+			Name:        "child-workflow",
+			Description: "Run a child workflow",
+			Steps: []*worker.WorkflowStep{
+				worker.Fn(func(ctx worker.HatchetContext) (result *stepOneOutput, err error) {
+					input := &childInput{}
+
+					err = ctx.WorkflowInput(input)
+
+					log.Printf("child workflow started with input: %v", input)
+
+					if err != nil {
+						return nil, err
+					}
+
+					return &stepOneOutput{Message: "child workflow"}, nil
+				},
+				).SetName("step-one").SetRetries(0),
+			},
+		},
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("error registering child workflow: %w", err)
 	}
 
 	// we need to retry the workflow if it is unavailable
@@ -115,71 +135,72 @@ func run(c client.Client) (func() error, error) {
 						}
 
 						log.Printf("start")
-						timeStart := time.Now()
 
-						events := os.Getenv("HATCHET_LOADTEST_EVENTS")
-						duration := os.Getenv("HATCHET_LOADTEST_DURATION")
+						workflows := os.Getenv("HATCHET_LOADTEST_WORKFLOW_RUNS")
 
-						if events == "" {
-							events = "1"
-						}
-
-						if duration == "" {
-							duration = "10s"
-						}
-
-						if input.Data["duration"] != "" {
-							duration = input.Data["duration"]
-							log.Printf("using duration from input data: %s", duration)
+						if workflows == "" {
+							workflows = "100000"
 						}
 
 						if input.Data["events"] != "" {
-							events = input.Data["events"]
-							log.Printf("using events from input data: %s", events)
+							workflows = input.Data["events"]
+							log.Printf("using events from input data: %s", workflows)
 						}
 
-						// for container it is in root
-						testCmd := fmt.Sprintf("/loadtest loadtest --duration \"%s\" --events %s", duration, events)
-						//testCmd := "echo \"Hello, World!\""
-						// run a load test
-						commandCtx, cancel := context.WithCancel(context.Background())
-						defer cancel()
-
-						cmd := exec.CommandContext(commandCtx, "sh", "-c", testCmd)
-
-						// Inherit the current environment
-						cmd.Env = os.Environ()
-
-						// Set the output to go to the standard output and error
-						cmd.Stdout = os.Stdout
-						cmd.Stderr = os.Stderr
-
-						// Run the command
-						err = cmd.Run()
-
-						if err != nil {
-							fmt.Println("Error running command " + testCmd)
-							fmt.Println(err)
-							return nil, err
-						}
-						timeEnd := time.Now()
-
-						timeTaken := timeEnd.Sub(timeStart)
-						fmt.Println("Time taken: ", timeTaken)
-						// convert events to int
-
-						eventCount, err := strconv.ParseInt(events, 10, 64)
+						workflowCount, err := strconv.ParseInt(workflows, 10, 32)
 						if err != nil {
 							return nil, fmt.Errorf("error converting events to int64: %w", err)
 						}
 
-						parsedDuration, err := time.ParseDuration(duration)
+						start := time.Now()
+
+						var wg sync.WaitGroup
+						results := make([]string, workflowCount)
+						resultCh := make(chan string, workflowCount)
+						for i := 0; i < int(workflowCount); i++ {
+							fmt.Printf("spawning  %d th workflow ", i)
+							wg.Add(1)
+							go func(i int) {
+								defer wg.Done()
+								childInput := childInput{Data: map[string]string{"in": strconv.Itoa(i)}}
+								childWorkflow, err := ctx.SpawnWorkflow("child-workflow", childInput, &worker.SpawnWorkflowOpts{})
+								if err != nil {
+									// Handle error here
+									return
+								}
+								// Collect the result from the child workflow
+								result, err := childWorkflow.Result()
+								if err != nil {
+									// Handle error here
+
+									fmt.Println(err)
+									// we don't send to channel
+									return
+								}
+								fmt.Println(result)
+
+								resultCh <- "result-" + strconv.Itoa(i) + ": "
+							}(i)
+						}
+						go func() {
+							wg.Wait()
+							close(resultCh)
+						}()
+
+						// Collect all results
+						for result := range resultCh {
+							results = append(results, result)
+						}
+
+						// wait for all child workflows to complete
+
+						parsedDuration := time.Since(start)
 
 						durationSeconds := parsedDuration.Seconds()
 
-						eventsPerSecond := float64(eventCount) / durationSeconds
+						eventsPerSecond := float64(workflowCount) / durationSeconds
 
-						return &stepOneOutput{Message: fmt.Sprintf("%.2f events per second", eventsPerSecond)}, nil
+						return &stepOneOutput{Message: fmt.Sprintf("%.2f workflows per second", eventsPerSecond)}, nil
 
 					},
 					).SetName("step-one").SetRetries(0),
