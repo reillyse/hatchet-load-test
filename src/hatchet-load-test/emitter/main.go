@@ -139,17 +139,17 @@ func run(c client.Client) (func() error, error) {
 						workflows := os.Getenv("HATCHET_LOADTEST_WORKFLOW_RUNS")
 
 						if workflows == "" {
-							workflows = "100"
+							workflows = "1000"
 						}
 
-						if input.Data["events"] != "" {
-							workflows = input.Data["events"]
-							log.Printf("using events from input data: %s", workflows)
+						if input.Data["workflows"] != "" {
+							workflows = input.Data["workflows"]
+							log.Printf("using workflows from input data: %s", workflows)
 						}
 
 						workflowCount, err := strconv.ParseInt(workflows, 10, 32)
 						if err != nil {
-							return nil, fmt.Errorf("error converting events to int64: %w", err)
+							return nil, fmt.Errorf("error converting workflows to int64: %w", err)
 						}
 
 						start := time.Now()
@@ -157,12 +157,18 @@ func run(c client.Client) (func() error, error) {
 						var wg sync.WaitGroup
 						results := make([]string, workflowCount)
 						resultCh := make(chan string, workflowCount)
+						concurrencyLimit := 100
+
+						semChannel := make(chan struct{}, concurrencyLimit)
+
 						for i := 0; i < int(workflowCount); i++ {
-							if i%100 == 0 {
-								fmt.Printf("spawning  %d th workflow \n", i)
-							}
+							// if i%100 == 0 {
+							fmt.Printf("spawning  %d th workflow \n", i)
+							// }
 							wg.Add(1)
 							go func(i int) {
+								<-semChannel
+
 								defer wg.Done()
 								childInput := childInput{Data: map[string]string{"in": strconv.Itoa(i)}}
 								childWorkflow, err := ctx.SpawnWorkflow("child-workflow", childInput, &worker.SpawnWorkflowOpts{})
@@ -170,6 +176,7 @@ func run(c client.Client) (func() error, error) {
 									// Handle error here
 									return
 								}
+								semChannel <- struct{}{}
 								// Collect the result from the child workflow
 								result, err := childWorkflow.Result()
 								if err != nil {
