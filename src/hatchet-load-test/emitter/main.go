@@ -148,6 +148,23 @@ func run(c client.Client) (func() error, error) {
 							log.Printf("using workflows from input data: %s", workflows)
 						}
 
+						var pushConcurrency int
+
+						if input.Data["pushConcurrency"] != "" {
+							pc := input.Data["pushConcurrency"]
+
+							pushConcurrency, err = strconv.Atoi(pc)
+							if err != nil {
+								return nil, fmt.Errorf("error converting pushConcurrency to int: %w", err)
+							}
+
+							log.Printf("using pushConcurrency from input data: %d", pushConcurrency)
+						}
+
+						if pushConcurrency == 0 {
+							pushConcurrency = 100
+						}
+
 						workflowCount, err := strconv.ParseInt(workflows, 10, 32)
 						if err != nil {
 							return nil, fmt.Errorf("error converting workflows to int64: %w", err)
@@ -158,9 +175,8 @@ func run(c client.Client) (func() error, error) {
 						var wg sync.WaitGroup
 						results := make([]string, workflowCount)
 						resultCh := make(chan string, workflowCount)
-						concurrencyLimit := 100
 
-						semChannel := make(chan struct{}, concurrencyLimit)
+						semChannel := make(chan struct{}, pushConcurrency)
 
 						for i := 0; i < int(workflowCount); i++ {
 							wg.Add(1)
