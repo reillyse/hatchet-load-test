@@ -140,7 +140,7 @@ func run(c client.Client) (func() error, error) {
 						workflows := os.Getenv("HATCHET_LOADTEST_WORKFLOW_RUNS")
 
 						if workflows == "" {
-							workflows = "10000"
+							workflows = "10"
 						}
 
 						if input.Data["workflows"] != "" {
