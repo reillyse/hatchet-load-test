@@ -139,7 +139,7 @@ func run(c client.Client) (func() error, error) {
 						workflows := os.Getenv("HATCHET_LOADTEST_WORKFLOW_RUNS")
 
 						if workflows == "" {
-							workflows = "100000"
+							workflows = "100"
 						}
 
 						if input.Data["events"] != "" {
@@ -158,7 +158,9 @@ func run(c client.Client) (func() error, error) {
 						results := make([]string, workflowCount)
 						resultCh := make(chan string, workflowCount)
 						for i := 0; i < int(workflowCount); i++ {
-							fmt.Printf("spawning  %d th workflow ", i)
+							if i%100 == 0 {
+								fmt.Printf("spawning  %d th workflow \n", i)
+							}
 							wg.Add(1)
 							go func(i int) {
 								defer wg.Done()
