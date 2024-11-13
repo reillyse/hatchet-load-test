@@ -139,7 +139,7 @@ func run(c client.Client) (func() error, error) {
 						workflows := os.Getenv("HATCHET_LOADTEST_WORKFLOW_RUNS")
 
 						if workflows == "" {
-							workflows = "1000"
+							workflows = "10000"
 						}
 
 						if input.Data["workflows"] != "" {
@@ -157,34 +157,34 @@ func run(c client.Client) (func() error, error) {
 						var wg sync.WaitGroup
 						results := make([]string, workflowCount)
 						resultCh := make(chan string, workflowCount)
-						concurrencyLimit := 100
+						concurrencyLimit := 1000
 
 						semChannel := make(chan struct{}, concurrencyLimit)
 
 						for i := 0; i < int(workflowCount); i++ {
-							// if i%100 == 0 {
-							fmt.Printf("spawning  %d th workflow \n", i)
-							// }
 							wg.Add(1)
 							go func(i int) {
-								<-semChannel
+								fmt.Println("waiting for semaphore")
+								semChannel <- struct{}{}
+
+								if i%100 == 0 {
+									fmt.Printf("spawning  %d th workflow \n", i)
+								}
 
 								defer wg.Done()
 								childInput := childInput{Data: map[string]string{"in": strconv.Itoa(i)}}
 								childWorkflow, err := ctx.SpawnWorkflow("child-workflow", childInput, &worker.SpawnWorkflowOpts{})
 								if err != nil {
 									// Handle error here
-									return
+									panic(err)
+
 								}
-								semChannel <- struct{}{}
+								<-semChannel
 								// Collect the result from the child workflow
 								result, err := childWorkflow.Result()
 								if err != nil {
-									// Handle error here
+									panic(err)
 
-									fmt.Println(err)
-									// we don't send to channel
-									return
 								}
 								fmt.Println(result)
 
